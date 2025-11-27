@@ -93,7 +93,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "quizup",
         "USER": "quizup_user",
-        "PASSWORD": "YourStrongPassword",
+        "PASSWORD": config("DB_PASSWORD"),
         "HOST": "localhost",
         "PORT": "5432",
     }
