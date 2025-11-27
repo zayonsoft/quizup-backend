@@ -1,15 +1,11 @@
 import secrets
 import string
 
-
-from quizapp.utils import generate_code
 from django.utils.timezone import now
 from datetime import timedelta
 import secrets, hashlib
-from django.contrib.auth import get_user_model
-from quizapp.models import UserMailValidator
 
-User = get_user_model()
+# from quizapp.models import UserMailValidator
 
 
 def hash_code(code: str, salt: bytes) -> str:
@@ -22,6 +18,7 @@ def generate_random_chars(length: int = 6):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+"""
 def generate_code(email: str, expires_in_minutes=10) -> str:
     code = generate_random_chars(7)
     salt = secrets.token_bytes(16)
@@ -40,8 +37,9 @@ def generate_code(email: str, expires_in_minutes=10) -> str:
             email=email, otp_hash=otp_hash, otp_salt=otp_salt
         )
     return code
+"""
 
-
+"""
 def verify_code(email: str, code: str) -> bool:
     if not UserMailValidator.objects.filter(email=email).exists():
         return False
@@ -50,3 +48,5 @@ def verify_code(email: str, code: str) -> bool:
         return False
     computed = hash_code(code, bytes.fromhex(record.otp_salt))
     return secrets.compare_digest(record.otp_hash, computed)
+
+"""

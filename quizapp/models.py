@@ -1,19 +1,26 @@
 from django.db import models
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group, Permission
 import uuid
 from django.utils.timezone import now
 from datetime import timedelta
 from quizapp.utils import generate_random_chars
 from django.db import IntegrityError
 from django.core.exceptions import ValidationError
-
-User = get_user_model()
+from django.conf import settings
 
 
 class User(AbstractUser):
-    id = models.UUIDField(unique=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(
+        primary_key=True, unique=True, default=uuid.uuid4, editable=False
+    )
     email = models.EmailField(unique=True, blank=True)
+
+    groups = models.ManyToManyField(
+        Group, related_name="quizapp_user_groups", blank=True
+    )
+    user_permissions = models.ManyToManyField(
+        Permission, related_name="quizapp_user_permissions", blank=True
+    )
 
     def clean(self):
         super().clean()
@@ -42,7 +49,7 @@ class Contest(models.Model):
     name = models.CharField(max_length=700)
     levels = models.IntegerField(default=1)
     code = models.CharField(unique=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     date_created = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
