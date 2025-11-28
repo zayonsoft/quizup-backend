@@ -46,6 +46,7 @@ def generate_contest_code():
 
 
 class Contest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     name = models.CharField(max_length=700)
     levels = models.IntegerField(default=1)
     code = models.CharField(unique=True)
@@ -62,6 +63,7 @@ class Contest(models.Model):
 
 
 class Question(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
     level = models.IntegerField()
     is_chosen = models.BooleanField(default=False)
@@ -71,18 +73,21 @@ class Question(models.Model):
 
 
 class Option(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     text = models.TextField()
     is_correct = models.BooleanField(default=False)
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
 
 
 class Contestant(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
     name = models.CharField(max_length=700)
     is_qualified = models.BooleanField(default=True)
 
 
 class ContestControl(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
     contest = models.OneToOneField(Contest, on_delete=models.CASCADE)
     current_question = models.OneToOneField(
         Question, on_delete=models.SET_NULL, null=True
