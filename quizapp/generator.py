@@ -23,10 +23,9 @@ def generate_code(email: str, expires_in_minutes=10, length=6) -> str:
         validator_instance.otp_expires = otp_expires
         validator_instance.save()
     else:
-        pass
-        # UserMailValidator.objects.create(
-        #     email=email, otp_hash=otp_hash, otp_salt=otp_salt
-        # )
+        UserMailValidator.objects.create(
+            email=email, otp_hash=otp_hash, otp_salt=otp_salt
+        )
     return code
 
 

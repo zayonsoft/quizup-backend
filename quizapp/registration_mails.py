@@ -41,3 +41,35 @@ please use the verification code below:</p>
         return True
     except:
         return False
+
+
+def send_success_reg(to_mail: str, username: str, is_testing=False):
+    subject = "SUCCESSFUL QUIZUP REGISTRATION"
+    to_mails = [to_mail]
+    html_content = f"""
+<p>Hi, <b>{username}</b></p>
+
+<p>This is to inform you that your QUIZUP account has been successfully created</p>
+
+<p>You can now login your username or email and password</p>
+
+<p><b>Username:</b> <q><b>{username}</b></q></p>
+<p><b>Email:</b> <q><b>{to_mail}</b></q></p>
+
+<p>Thanks,</p>
+<p>The Quizup Team</p>
+
+<hr>
+{"<p><b>Note:</b> The application is still being tested and <b>NOT YET</b> in production</p>" if is_testing else ""}
+"""
+    text_content = strip_tags(html_content)
+
+    msg = EmailMultiAlternatives(subject, text_content, from_mail, to_mails)
+
+    msg.attach_alternative(html_content, "text/html")
+
+    try:
+        msg.send()
+        return True
+    except:
+        return False
