@@ -2,7 +2,7 @@ from quizapp.serializers import QuestionSerializer
 from rest_framework.views import APIView, Response, status
 from quizapp.models import Question, UserMailValidator
 from quizapp.generator import generate_code, verify_code
-from quizapp.registration_mails import send_validation_code
+from quizapp.registration_mails import send_validation_code, send_success_reg
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
@@ -40,7 +40,7 @@ class UserValidationCode(APIView):
         # Checking if a user already exists with the email
         # so that the person won't bother wasting my time
         if (
-            User.objects.filter(email=email).exists()
+            User.objects.filter(email__iexact=email).exists()
             or User.objects.filter(username=email).exists()
         ):
             return Response(
@@ -73,19 +73,20 @@ class UserValidationCode(APIView):
 ✅ Validity of the code is  checked
 ✅ Checks if entries don't match an existing username
 ✅ Checks if entries don't match an existing email
-⌛ Then account can be created
-⌛ delete the validation code instance from the database
+✅ Then account can be created
+✅ delete the validation code instance from the database
+⌛ Test the API endpoint
 """
 
 
 class UserSignup(APIView):
     def post(self, request):
-        username = request.data.get("username")
-        email = request.data.get("email")
-        password = request.data.get("password")
-        validation_code = request.data.get("validation_code")
+        username: str = request.data.get("username")
+        email: str = request.data.get("email")
+        password: str = request.data.get("password")
+        validation_code: str = request.data.get("validation_code")
 
-        if not UserMailValidator.objects.filter(email=email).exists():
+        if not UserMailValidator.objects.filter(email__iexact=email).exists():
             return Response({"detail": "The Email Has no generated code"})
 
         is_code_valid = verify_code(email, validation_code)
@@ -96,7 +97,24 @@ class UserSignup(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check for existing Username with the entered Username and Email8
+        # Check for username and other fields for empty values
+        if (
+            username
+            and email
+            and password
+            and username.strip()
+            and email.strip()
+            and password.strip()
+        ):
+            return Response(
+                {"detail": "All fields are required!"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = username.strip()
+        email = email.strip()
+        password = password.strip()
+
+        # Check for existing Username with the entered Username and Email
         # if it does, then send the user back to where they're coming from
         if (
             User.objects.filter(username=username).exists()
@@ -115,3 +133,15 @@ class UserSignup(APIView):
                 {"detail": "Email must be unique, try a different e-mail"},
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
+
+        created_user = User.objects.create_user(
+            username=username, email=email, password=password
+        )
+
+        validator = UserMailValidator.objects.get(email=created_user.email)
+        validator.delete()
+
+        return Response(
+            {"detail": f"User created successfully"},
+            status=status.HTTP_201_CREATED,
+        )
