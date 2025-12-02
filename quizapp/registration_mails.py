@@ -11,24 +11,29 @@ def send_validation_code(
     subject = "Your Quizup Verification Code"
     to_mails = [to_mail]
     html_content = f"""
-<p>Hi,</p>
+    
+<section style="background:whitesmoke;padding:20px;">
+    <div style="padding:10px;background:white;border-radius:5px;">
+        <p>Hi there,</p>
 
-<p>To continue with your sign-in/registration on <b>QUIZUP</b>,<br />
-please use the verification code below:</p>
+        <p>To continue with your sign-in/registration on <b>QUIZUP</b>,<br />
+        please use the verification code below:</p>
 
-<p>🔐 Your Verification Code:</p>
-<h2>{code}</h2>
+        <p>🔐 Your Verification Code:</p>
+        <h2>{code}</h2>
 
-<br />
-<p>This code will expire in <b>{expires_in_minutes} minutes.</b></p>
+        <br />
+        <p>This code will expire in <b>{expires_in_minutes} minutes.</b></p>
 
-<p>If you didn't request this code, you can safely ignore this email.</p>
+        <p>If you didn't request this code, you can safely ignore this email.</p>
 
-<p>Thanks,</p>
-<p>The Quizup Team</p>
+        <p>Thanks,</p>
+        <p>The Quizup Team</p>
 
-<hr>
-{"<p><b>Note:</b> The application is still being tested and <b>NOT YET</b> in production</p>" if is_testing else ""}
+        <hr>
+        {"<p><b>Note:</b> The application is still being tested and <b>NOT YET</b> in production</p>" if is_testing else ""}
+    </div>
+</section> 
 """
     text_content = strip_tags(html_content)
 
@@ -47,20 +52,24 @@ def send_success_reg(to_mail: str, username: str, is_testing=False):
     subject = "SUCCESSFUL QUIZUP REGISTRATION"
     to_mails = [to_mail]
     html_content = f"""
-<p>Hi, <b>{username}</b></p>
+<section style="background:whitesmoke;padding:20px;">
+    <div style="padding:10px;background:white;border-radius:5px;">
+        <p>Hi, <b>{username}</b></p>
 
-<p>This is to inform you that your QUIZUP account has been successfully created</p>
+        <p>This is to inform you that your QUIZUP account has been successfully created</p>
 
-<p>You can now login your username or email and password</p>
+        <p>You can now login your username or email and password</p>
 
-<p><b>Username:</b> <q><b>{username}</b></q></p>
-<p><b>Email:</b> <q><b>{to_mail}</b></q></p>
+        <p><b>Username:</b> <q><b>{username}</b></q></p>
+        <p><b>Email:</b> <q><b>{to_mail}</b></q></p>
 
-<p>Thanks,</p>
-<p>The Quizup Team</p>
+        <p>Thanks,</p>
+        <p>The Quizup Team</p>
 
-<hr>
-{"<p><b>Note:</b> The application is still being tested and <b>NOT YET</b> in production</p>" if is_testing else ""}
+        <hr>
+        {"<p><b>Note:</b> The application is still being tested and <b>NOT YET</b> in production</p>" if is_testing else ""}
+    </div>
+</section>    
 """
     text_content = strip_tags(html_content)
 

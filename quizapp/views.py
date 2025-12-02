@@ -86,6 +86,26 @@ class UserSignup(APIView):
         password: str = request.data.get("password")
         validation_code: str = request.data.get("validation_code")
 
+        empty_values = {}  # dictionary to append the empty values
+        if not (username and username.strip()):
+            empty_values["username"] = ["This field is required."]
+        if not (email and email.strip()):
+            empty_values["email"] = ["This field is required."]
+        if not (password and password.strip()):
+            empty_values["password"] = ["This field is required."]
+        if not (validation_code and validation_code.strip()):
+            empty_values["validation_code"] = ["This field is required."]
+
+        # Check if there are empty values, display the list
+        if len(empty_values) != 0:
+            return Response(
+                {"detail": empty_values},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        username = username.strip()
+        email = email.strip()
+        password = password.strip()
+
         if not UserMailValidator.objects.filter(email__iexact=email).exists():
             return Response({"detail": "The Email Has no generated code"})
 
@@ -96,23 +116,6 @@ class UserSignup(APIView):
                 {"detail": "Code is invalid or expired, you can request a new one"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-        # Check for username and other fields for empty values
-        if (
-            username
-            and email
-            and password
-            and username.strip()
-            and email.strip()
-            and password.strip()
-        ):
-            return Response(
-                {"detail": "All fields are required!"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        username = username.strip()
-        email = email.strip()
-        password = password.strip()
 
         # Check for existing Username with the entered Username and Email
         # if it does, then send the user back to where they're coming from
