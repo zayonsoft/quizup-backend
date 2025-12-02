@@ -19,7 +19,7 @@ def send_validation_code(
         <p>To continue with your sign-in/registration on <b>QUIZUP</b>,<br />
         please use the verification code below:</p>
 
-        <p>🔐 Your Verification Code:</p>
+        <p>🔐 Your Verification Code: {code.replace(" ", "",-1)}</p>
         <h2>{code}</h2>
 
         <br />
@@ -60,8 +60,8 @@ def send_success_reg(to_mail: str, username: str, is_testing=False):
 
         <p>You can now login your username or email and password</p>
 
-        <p><b>Username:</b> <q><b>{username}</b></q></p>
-        <p><b>Email:</b> <q><b>{to_mail}</b></q></p>
+        <p><b>Username:</b> <q>{username}</q></p>
+        <p><b>Email:</b> <q>{to_mail}</q></p>
 
         <p>Thanks,</p>
         <p>The Quizup Team</p>

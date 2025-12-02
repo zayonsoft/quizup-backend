@@ -35,7 +35,16 @@ class QuestionView(APIView):
 
 class UserValidationCode(APIView):
     def post(self, request):
-        email = request.data.get("email")
+        email: str = request.data.get("email")
+
+        empty_values = {}
+        if not (email and email.strip()):
+            empty_values["email"] = ["This field is required"]
+
+        if len(empty_values) != 0:
+            return Response(
+                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # Checking if a user already exists with the email
         # so that the person won't bother wasting my time
@@ -75,7 +84,7 @@ class UserValidationCode(APIView):
 ✅ Checks if entries don't match an existing email
 ✅ Then account can be created
 ✅ delete the validation code instance from the database
-⌛ Test the API endpoint
+✅ Test the API endpoint
 """
 
 
