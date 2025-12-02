@@ -33,7 +33,7 @@ class QuestionView(APIView):
         )
 
 
-class UserValidationCode(APIView):
+class MailValidationView(APIView):
     def post(self, request):
         email: str = request.data.get("email")
 
@@ -88,7 +88,7 @@ class UserValidationCode(APIView):
 """
 
 
-class UserSignup(APIView):
+class UserSignupView(APIView):
     def post(self, request):
         username: str = request.data.get("username")
         email: str = request.data.get("email")
