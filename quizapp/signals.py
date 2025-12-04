@@ -12,7 +12,7 @@ User = get_user_model()
 @receiver(pre_save, sender=User)
 def lower_email(sender, instance: AbstractUser, **kwargs):
     if instance.email:
-        instance.email = instance.email.lower()
+        instance.email = instance.email.lower().strip()
 
 
 # Send Success Mail When the user completes registration

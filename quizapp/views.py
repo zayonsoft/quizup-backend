@@ -5,19 +5,22 @@ from quizapp.generator import generate_code, verify_code
 from quizapp.registration_mails import send_validation_code, send_success_reg
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth import authenticate
+from rest_framework.request import Request
 
 DEBUG = settings.DEBUG
 User = get_user_model()
 
 
 class QuestionView(APIView):
-    def get(self, request):
+    def get(self, request: Request):
         questions = Question.objects.all()
         # This will be for all questions for a person
         serializer = QuestionSerializer(questions, many=True)
         return Response({"data": serializer.data}, status=status.HTTP_200_OK)
 
-    def post(self, request):
+    def post(self, request: Request):
         # Will have to make sure the person making the request created the contest
         contest = request.data.get("contest")
         level = request.data.get("level")
@@ -89,7 +92,7 @@ class MailValidationView(APIView):
 
 
 class UserSignupView(APIView):
-    def post(self, request):
+    def post(self, request: Request):
         username: str = request.data.get("username")
         email: str = request.data.get("email")
         password: str = request.data.get("password")
@@ -157,3 +160,66 @@ class UserSignupView(APIView):
             {"detail": f"User created successfully"},
             status=status.HTTP_201_CREATED,
         )
+
+
+def confirmUserDetail(email_or_username):
+    if (
+        User.objects.filter(username=email_or_username).exists()
+        or User.objects.filter(email=email_or_username).exists()
+    ):
+        return True
+    else:
+        return False
+
+
+class SigninView(APIView):
+    def post(self, request: Request):
+        username_or_email: str = request.data.get("username_or_email")
+        password: str = request.data.get("password")
+
+        empty_values = {}
+        if not (username_or_email and username_or_email.strip()):
+            empty_values["username_or_email"] = ["This field is required"]
+
+        if not (password and password.strip()):
+            empty_values["password"] = ["This field is required"]
+
+        if len(empty_values) != 0:
+            return Response(
+                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        password = password.strip()
+        username_or_email = username_or_email.strip()
+        username = ""
+
+        if not confirmUserDetail(username_or_email):
+            return Response(
+                {"detail": "Invalid Username or Email"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if User.objects.filter(username=username_or_email).exists():
+            username = username_or_email
+
+        else:
+            username = User.objects.get(email=username_or_email).username
+
+        user = authenticate(username=username, password=password)
+
+        if user is not None:
+            obtained_tokens = RefreshToken.for_user(user)
+            return Response(
+                {
+                    "tokens": {
+                        "access": str(obtained_tokens.access_token),
+                        "refresh": str(obtained_tokens),
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"detail": "Invalid Login Credentials"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
