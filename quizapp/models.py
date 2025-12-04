@@ -46,12 +46,25 @@ def generate_contest_code():
 
 
 class Contest(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=700)
     levels = models.IntegerField(default=1)
-    code = models.CharField(unique=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    date_created = models.DateTimeField(auto_now_add=True)
+    code = models.CharField(unique=True, default=generate_contest_code, editable=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, editable=False
+    )
+    date_created = models.DateTimeField(auto_now_add=True, editable=False)
+
+    # create a db constraint for created_by and name so that the current user
+    #  cannot create multiple contests with the same name
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name", "created_by"],
+                name="unique_user_contest",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         for _ in range(6):
@@ -63,7 +76,7 @@ class Contest(models.Model):
 
 
 class Question(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
     level = models.IntegerField()
     is_chosen = models.BooleanField(default=False)
@@ -73,21 +86,21 @@ class Question(models.Model):
 
 
 class Option(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     text = models.TextField()
     is_correct = models.BooleanField(default=False)
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
 
 
 class Contestant(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
     name = models.CharField(max_length=700)
     is_qualified = models.BooleanField(default=True)
 
 
 class ContestControl(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contest = models.OneToOneField(Contest, on_delete=models.CASCADE)
     current_question = models.OneToOneField(
         Question, on_delete=models.SET_NULL, null=True
@@ -102,7 +115,7 @@ def ten_minutes_from_now():
 
 
 class UserMailValidator(models.Model):
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=True, editable=False)
     otp_hash = models.CharField(max_length=100, editable=False, null=True)
     otp_salt = models.CharField(max_length=100, editable=False, null=True)
     otp_expires = models.DateTimeField(default=ten_minutes_from_now)

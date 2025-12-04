@@ -71,6 +71,12 @@ TEMPLATES = [
     },
 ]
 
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
+
 WSGI_APPLICATION = "quizup.wsgi.application"
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]

@@ -1,13 +1,17 @@
-from quizapp.serializers import QuestionSerializer
+from quizapp.serializers import QuestionSerializer, ContestSerializer
 from rest_framework.views import APIView, Response, status
-from quizapp.models import Question, UserMailValidator
+from quizapp.models import Question, UserMailValidator, Contest
 from quizapp.generator import generate_code, verify_code
-from quizapp.registration_mails import send_validation_code, send_success_reg
+from quizapp.registration_mails import send_validation_code
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework.request import Request
+from rest_framework.permissions import IsAuthenticated
+import uuid
+from django.db.models import Q
+
 
 DEBUG = settings.DEBUG
 User = get_user_model()
@@ -64,7 +68,7 @@ class MailValidationView(APIView):
 
         code_expires_in = 15
         code = generate_code(email, expires_in_minutes=code_expires_in, length=6)
-        formated_code = " ".join(code[i : i + 3] for i in range(0, len(code), 3))
+        formated_code = " ".join(code[i] for i in range(0, len(code)))
 
         is_sent = send_validation_code(
             email, formated_code, code_expires_in, is_testing=DEBUG
@@ -191,7 +195,7 @@ class SigninView(APIView):
 
         password = password.strip()
         username_or_email = username_or_email.strip()
-        username = ""
+        username: str
 
         if not confirmUserDetail(username_or_email):
             return Response(
@@ -222,4 +226,122 @@ class SigninView(APIView):
             return Response(
                 {"detail": "Invalid Login Credentials"},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+# For GetAll (search included), Create New Contest
+class ContestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # create contest
+    def post(self, request: Request):
+        name: str = request.data.get("name")
+        levels: str = request.data.get("levels")
+
+        empty_values = {}
+
+        if not (name and name.strip()):
+            empty_values["name"] = ["This field is required"]
+        if not (levels and levels.strip()):
+            empty_values["levels"] = ["This field is required"]
+
+        if len(empty_values) != 0:
+            return Response(
+                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if Contest.objects.filter(name__iexact=name, created_by=request.user):
+            return Response(
+                {"detail": {"name": ["A Contest with this name already exists"]}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not levels.isdigit():
+            return Response(
+                {"detail": {"levels": ["Must be a number"]}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        Contest.objects.create(name=name, levels=levels, created_by=request.user)
+
+        return Response(
+            {"detail": "Contest created successfully"}, status=status.HTTP_201_CREATED
+        )
+
+    # get all the user's contest
+    def get(self, request: Request):
+        search = request.query_params.get("search")
+        contests: Contest
+        if search and search.strip():
+            contests = Contest.objects.filter(created_by=request.user).filter(
+                Q(name__icontains=search) | Q(code__icontains=search)
+            )
+        else:
+            contests = Contest.objects.filter(created_by=request.user)
+        serializer = ContestSerializer(contests, many=True)
+        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+
+
+# For GET, EDIT, DELETE requires pk parameter
+class ContestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # fetch a specific contest
+    def get(self, request: Request, pk):
+        try:
+            uuid.UUID(pk)
+        except:
+            return Response(
+                {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not Contest.objects.filter(id=pk, created_by=request.user).exists():
+            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+        contest = Contest.objects.get(pk=pk)
+
+        serializer = ContestSerializer(contest)
+        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+
+    def delete(self, request: Request, pk):
+        try:
+            uuid.UUID(pk)
+        except:
+            return Response(
+                {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(id=pk, created_by=request.user).exists():
+            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+        contest = Contest.objects.get(pk=pk)
+
+        contest.delete()
+        return Response(
+            {"detail": "Contest Deleted"}, status=status.HTTP_204_NO_CONTENT
+        )
+
+    def patch(self, request: Request, pk):
+        try:
+            uuid.UUID(pk)
+        except:
+            return Response(
+                {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(id=pk, created_by=request.user).exists():
+            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+        contest = Contest.objects.get(pk=pk)
+
+        name: str = request.data.get("name")
+
+        if Contest.objects.filter(name__icontains=name).exclude(pk=pk).exists():
+            return Response(
+                {"detail": {"name": ["A Contest with this name already exists"]}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ContestSerializer(contest, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"detail": "Contest Updated"}, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
             )
