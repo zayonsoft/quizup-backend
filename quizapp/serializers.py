@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from quizapp.models import Question, Contest, Contestant, Option
 from django.contrib.auth import get_user_model
-from rest_framework.validators import UniqueTogetherValidator
+from rest_framework.validators import UniqueTogetherValidator, DataError
 
 User = get_user_model()
 
@@ -39,3 +39,9 @@ class ContestSerializer(serializers.ModelSerializer):
             message="User has a contest with the given name",
         )
     ]
+
+
+class ContestantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contestant
+        fields = "__all__"

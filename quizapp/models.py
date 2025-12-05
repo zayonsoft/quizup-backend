@@ -98,6 +98,14 @@ class Contestant(models.Model):
     name = models.CharField(max_length=700)
     is_qualified = models.BooleanField(default=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contest", "name"],
+                name="unique_contest_contestant",
+            )
+        ]
+
 
 class ContestControl(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

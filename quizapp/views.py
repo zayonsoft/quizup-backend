@@ -1,6 +1,10 @@
-from quizapp.serializers import QuestionSerializer, ContestSerializer
+from quizapp.serializers import (
+    QuestionSerializer,
+    ContestSerializer,
+    ContestantSerializer,
+)
 from rest_framework.views import APIView, Response, status
-from quizapp.models import Question, UserMailValidator, Contest
+from quizapp.models import Question, UserMailValidator, Contest, Contestant
 from quizapp.generator import generate_code, verify_code
 from quizapp.registration_mails import send_validation_code
 from django.conf import settings
@@ -345,3 +349,61 @@ class ContestView(APIView):
             return Response(
                 {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class ContestantsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # Creating Contestant
+    def post(self, request: Request):
+        name: str = request.data.get("name")
+        contest_id: str = request.data.get("contest")
+
+        empty_values = {}
+        if not (name and name.strip()):
+            empty_values["name"] = ["This field is required"]
+
+        if not (contest_id and contest_id.strip()):
+            empty_values["contest"] = ["This field is required"]
+
+        if len(empty_values) != 0:
+            return Response(
+                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            uuid.UUID(contest_id)
+        except:
+            return Response(
+                {"detail": "Invalid Contest"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest is not valid for the user"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contest = Contest.objects.get(pk=contest_id)
+
+        if Contestant.objects.filter(name__iexact=name, contest=contest).exists():
+            return Response(
+                {"detail": {"name": ["Contestant name be unique within contest"]}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        data = {"name": name.strip(), "contest": contest}
+
+        serializer = ContestantSerializer(data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"detail": "Contestant Created"}, status=status.HTTP_201_CREATED
+            )
+
+    # get all user's contestants
+    def get(self, request: Request):
+        contestants = Contestant.objects.filter(contest__created_by=request.user)
+        # adding search soon and nested Serializer so that it can carry details of the contest too
+
+        serializer = ContestantSerializer(contestants, many=True)
+
+        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
