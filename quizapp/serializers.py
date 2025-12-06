@@ -2,6 +2,8 @@ from rest_framework import serializers
 from quizapp.models import Question, Contest, Contestant, Option
 from django.contrib.auth import get_user_model
 from rest_framework.validators import UniqueTogetherValidator, DataError
+import uuid
+from rest_framework.request import Request
 
 User = get_user_model()
 
@@ -42,6 +44,42 @@ class ContestSerializer(serializers.ModelSerializer):
 
 
 class ContestantSerializer(serializers.ModelSerializer):
+    contest = ContestSerializer(read_only=True)
+
     class Meta:
         model = Contestant
         fields = "__all__"
+
+    def validate_name(self, value: str):
+        value = value.strip()
+        if not (value and value.strip()):
+            raise serializers.ValidationError("This field is required")
+
+        return value
+
+    def validate(self, attrs: dict):
+        name = attrs.get("name")
+        contest_id = self.context.get("contest_id")
+        contest = Contest.objects.get(pk=contest_id)
+        if not self.instance:
+            if Contestant.objects.filter(name__iexact=name, contest=contest).exists():
+                raise serializers.ValidationError(
+                    {"name": "Contestant name must be unique in a contest"}
+                )
+        else:
+            if (
+                Contestant.objects.filter(name__iexact=name, contest=contest)
+                .exclude(pk=self.instance.pk)
+                .exists()
+            ):
+                raise serializers.ValidationError(
+                    {"name": "Contestant name must be unique in a contest"}
+                )
+        return attrs
+
+    def create(self, validated_data: dict):
+        contest_id = self.context.get("contest_id")
+        contest = Contest.objects.get(pk=contest_id)
+        validated_data["contest"] = contest
+
+        return super().create(validated_data)

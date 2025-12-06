@@ -13,4 +13,12 @@ urlpatterns = [
     path("refresh_token", TokenRefreshView.as_view(), name="refresh_token"),
     path("contests", views.ContestsView.as_view(), name="contests"),
     path("contest/<str:pk>", views.ContestView.as_view(), name="contest"),
+    path(
+        "contestants/<str:contest_id>", views.ContestantsView.as_view(), name="contest"
+    ),
+    path(
+        "contestant/<str:contestant_id>",
+        views.ContestantView.as_view(),
+        name="contestant",
+    ),
 ]

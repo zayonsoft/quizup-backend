@@ -355,55 +355,155 @@ class ContestantsView(APIView):
     permission_classes = [IsAuthenticated]
 
     # Creating Contestant
-    def post(self, request: Request):
-        name: str = request.data.get("name")
-        contest_id: str = request.data.get("contest")
-
-        empty_values = {}
-        if not (name and name.strip()):
-            empty_values["name"] = ["This field is required"]
-
-        if not (contest_id and contest_id.strip()):
-            empty_values["contest"] = ["This field is required"]
-
-        if len(empty_values) != 0:
-            return Response(
-                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
-            )
+    def post(self, request: Request, contest_id: str):
 
         try:
             uuid.UUID(contest_id)
         except:
             return Response(
-                {"detail": "Invalid Contest"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         if not Contest.objects.filter(pk=contest_id, created_by=request.user):
             return Response(
-                {"detail": "Contest is not valid for the user"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "detail": "Contest not found or does not belong to the authenticated user"
+                }
             )
-        contest = Contest.objects.get(pk=contest_id)
 
-        if Contestant.objects.filter(name__iexact=name, contest=contest).exists():
-            return Response(
-                {"detail": {"name": ["Contestant name be unique within contest"]}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        data = {"name": name.strip(), "contest": contest}
-
-        serializer = ContestantSerializer(data)
+        serializer = ContestantSerializer(
+            data=request.data, context={"request": request, "contest_id": contest_id}
+        )
         if serializer.is_valid():
             serializer.save()
             return Response(
                 {"detail": "Contestant Created"}, status=status.HTTP_201_CREATED
             )
+        else:
+            return Response(
+                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-    # get all user's contestants
-    def get(self, request: Request):
-        contestants = Contestant.objects.filter(contest__created_by=request.user)
-        # adding search soon and nested Serializer so that it can carry details of the contest too
+    # get all user's contestants for a contest
+    def get(self, request: Request, contest_id: str):
+        try:
+            uuid.UUID(contest_id)
+        except:
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user).exists():
+            return Response(
+                {
+                    "detail": "Contest not found or does not belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contest = Contest.objects.prefetch_related("contestant_set").get(
+            pk=contest_id, created_by=request.user
+        )
+        search: str = request.query_params.get("search")
+        contestants: Contestant
+        if not (search and search.strip()):
+            contestants = contest.contestant_set.all()
+
+        else:
+            search = search.strip()
+            contestants = contest.contestant_set.all().filter(
+                Q(name__icontains=search) | Q(contest__name__icontains=search)
+            )
 
         serializer = ContestantSerializer(contestants, many=True)
 
         return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+
+
+def check_uuid(contestant_id: str):
+    try:
+        uuid.UUID(contestant_id)
+        return True
+    except:
+        return False
+
+
+# to cater for delete, edit, update, fetching a specific contestant
+class ContestantView(APIView):
+    def get(self, request: Request, contestant_id: str):
+        if not check_uuid(contestant_id):
+            return Response(
+                {"detail": "Invalid Contestant Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contestant.objects.filter(
+            pk=contestant_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Contestant not found or does not belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contestant: Contestant
+
+        contestant = Contestant.objects.select_related("contest").get(
+            pk=contestant_id, contest__created_by=request.user
+        )
+        serializer = ContestantSerializer(contestant)
+
+        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+
+    def patch(self, request: Request, contestant_id: str):
+
+        if not check_uuid(contestant_id):
+            return Response(
+                {"detail": "Invalid Contestant Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contestant.objects.filter(
+            pk=contestant_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Contestant not found or does not belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contestant = Contestant.objects.select_related("contest").get(
+            pk=contestant_id, contest__created_by=request.user
+        )
+        serializer = ContestantSerializer(
+            contestant,
+            data=request.data,
+            context={"contest_id": contestant.contest.pk},
+            partial=True,
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"detail": "Contestant Updated"}, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def delete(self, request: Request, contestant_id: str):
+        if not check_uuid(contestant_id):
+            return Response(
+                {"detail": "Invalid Contestant Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contestant.objects.filter(
+            pk=contestant_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Contestant not found or does not belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contestant = Contestant.objects.get(
+            pk=contestant_id, contest__created_by=request.user
+        )
+        contestant.delete()
+        return Response({"detail": "Successfully Deleted"}, status=status.HTTP_200_OK)
