@@ -8,13 +8,6 @@ from rest_framework.request import Request
 User = get_user_model()
 
 
-class QuestionSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Question
-        fields = "__all__"
-
-
 class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -59,6 +52,8 @@ class ContestantSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict):
         name = attrs.get("name")
+        if not name:
+            raise serializers.ValidationError({"name": "This Field is required"})
         contest_id = self.context.get("contest_id")
         contest = Contest.objects.get(pk=contest_id)
         if not self.instance:
@@ -83,3 +78,19 @@ class ContestantSerializer(serializers.ModelSerializer):
         validated_data["contest"] = contest
 
         return super().create(validated_data)
+
+
+class OptionSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Option
+        fields = "__all__"
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    option = OptionSerializer(many=True, source="option_set")
+    contest = ContestSerializer(read_only=True)
+
+    class Meta:
+        model = Question
+        fields = "__all__"

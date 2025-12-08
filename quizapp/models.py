@@ -7,6 +7,7 @@ from quizapp.utils import generate_random_chars
 from django.db import IntegrityError
 from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.db.models import CheckConstraint, Q
 
 
 class User(AbstractUser):
@@ -63,7 +64,8 @@ class Contest(models.Model):
             models.UniqueConstraint(
                 fields=["name", "created_by"],
                 name="unique_user_contest",
-            )
+            ),
+            CheckConstraint(condition=Q(levels__gte=1), name="min_number_of_levels"),
         ]
 
     def save(self, *args, **kwargs):
@@ -78,6 +80,7 @@ class Contest(models.Model):
 class Question(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
+    text = models.TextField()
     level = models.IntegerField()
     is_chosen = models.BooleanField(default=False)
     has_option = models.BooleanField(default=False)
@@ -90,6 +93,15 @@ class Option(models.Model):
     text = models.TextField()
     is_correct = models.BooleanField(default=False)
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["question"],
+                condition=Q(is_correct=True),
+                name="one_correct_answer_per_question",
+            )
+        ]
 
 
 class Contestant(models.Model):

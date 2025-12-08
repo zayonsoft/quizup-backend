@@ -21,29 +21,6 @@ DEBUG = settings.DEBUG
 User = get_user_model()
 
 
-class QuestionView(APIView):
-    def get(self, request: Request):
-        questions = Question.objects.all()
-        # This will be for all questions for a person
-        serializer = QuestionSerializer(questions, many=True)
-        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
-
-    def post(self, request: Request):
-        # Will have to make sure the person making the request created the contest
-        contest = request.data.get("contest")
-        level = request.data.get("level")
-        is_chosen = request.data.get("is_choden")
-        has_option = request.data.get("has_option")
-
-        serializer = QuestionSerializer(data=request.data)
-        if serializer.is_valid():
-            return Response(status=status.HTTP_200_OK)
-
-        return Response(
-            {"detail": serializer.errors}, status=status.HTTP_501_NOT_IMPLEMENTED
-        )
-
-
 class MailValidationView(APIView):
     def post(self, request):
         email: str = request.data.get("email")
@@ -418,9 +395,9 @@ class ContestantsView(APIView):
         return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
 
 
-def check_uuid(contestant_id: str):
+def check_uuid(id: str):
     try:
-        uuid.UUID(contestant_id)
+        uuid.UUID(id)
         return True
     except:
         return False
@@ -469,7 +446,7 @@ class ContestantView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        contestant = Contestant.objects.select_related("contest").get(
+        contestant = Contestant.objects.get(
             pk=contestant_id, contest__created_by=request.user
         )
         serializer = ContestantSerializer(
@@ -507,3 +484,69 @@ class ContestantView(APIView):
         )
         contestant.delete()
         return Response({"detail": "Successfully Deleted"}, status=status.HTTP_200_OK)
+
+
+class QuestionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        questions = (
+            Question.objects.select_related("contest")
+            .prefetch_related("options")
+            .filter(contest__created_by=request.user)
+        )
+        # This will be for all questions for a person
+        serializer = QuestionSerializer(questions, many=True)
+        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+
+    # creating questions for a specific contest
+    def post(self, request: Request, contest_id: str):
+        # Will have to make sure the person making the request created the contest
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user).exists():
+            return Response(
+                {
+                    "detail": "Contest not found or does not belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contest = Contest.objects.get(pk=contest_id, created_by=request.user)
+        text: str = request.data.get("text")
+        level: str = str(request.data.get("level"))
+        has_option: bool = request.data.get("has_option")
+        options = request.data.get("options")
+        error_values = {}
+        if not (level and level.isdigit()):
+            error_values["level"] = ["This field is required and Must be a Number"]
+        if not (text and text.strip()):
+            error_values["text"] = ["This field is required"]
+        if not (type(has_option) == bool):
+            error_values["has_options"] = ["Should be either 'true' or 'false'"]
+        if has_option and not (type(options) == list):
+            error_values["options"] = ["Options should be of list type '[]'"]
+
+        if (has_option and type(options) == list) and not len(options) > 1:
+            error_values[options] = [
+                "Options must be more than one when options are set"
+            ]
+
+        if len(error_values) != 0:
+            return Response(
+                {"detail": error_values}, status=status.HTTP_400_BAD_REQUEST
+            )
+        text = text.strip()
+        level = int(level)
+        if level > contest.levels:
+            return Response(
+                {
+                    "level": f"You can only set questions for {"level 1" if not contest.levels>1 else f"level 1 - {contest.levels}"}"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {"detail": "Not Implemented"}, status=status.HTTP_501_NOT_IMPLEMENTED
+        )
