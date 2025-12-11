@@ -4,7 +4,7 @@ from quizapp.serializers import (
     ContestantSerializer,
 )
 from rest_framework.views import APIView, Response, status
-from quizapp.models import Question, UserMailValidator, Contest, Contestant
+from quizapp.models import Question, UserMailValidator, Contest, Contestant, Option
 from quizapp.generator import generate_code, verify_code
 from quizapp.registration_mails import send_validation_code
 from django.conf import settings
@@ -13,7 +13,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework.request import Request
 from rest_framework.permissions import IsAuthenticated
-import uuid
+import uuid, json
 from django.db.models import Q
 
 
@@ -30,9 +30,7 @@ class MailValidationView(APIView):
             empty_values["email"] = ["This field is required"]
 
         if len(empty_values) != 0:
-            return Response(
-                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(empty_values, status=status.HTTP_400_BAD_REQUEST)
 
         # Checking if a user already exists with the email
         # so that the person won't bother wasting my time
@@ -42,7 +40,9 @@ class MailValidationView(APIView):
         ):
             return Response(
                 {
-                    "detail": "Cannot generate a code for an existing user e-mail, try a different e-mail"
+                    "email": [
+                        "Cannot generate a code for an existing user e-mail, try a different e-mail"
+                    ]
                 },
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
@@ -60,7 +60,11 @@ class MailValidationView(APIView):
             )
         else:
             return Response(
-                {"detail": f"Couldn't Send Mail to {email}, pls try again later"},
+                {
+                    "non_field_errors": [
+                        f"Couldn't Send Mail to {email}, pls try again later"
+                    ]
+                },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -104,13 +108,19 @@ class UserSignupView(APIView):
         password = password.strip()
 
         if not UserMailValidator.objects.filter(email__iexact=email).exists():
-            return Response({"detail": "The Email Has no generated code"})
+            return Response({"detail": {"email": ["The Email Has no generated code"]}})
 
         is_code_valid = verify_code(email, validation_code)
 
         if not is_code_valid:
             return Response(
-                {"detail": "Code is invalid or expired, you can request a new one"},
+                {
+                    "detail": {
+                        "code": [
+                            "Code is invalid or expired, you can request a new one"
+                        ]
+                    }
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -121,7 +131,7 @@ class UserSignupView(APIView):
             or User.objects.filter(username=email).exists()
         ):
             return Response(
-                {"detail": "Username must be unique for each user"},
+                {"detail": {"username": ["Username must be unique for each user"]}},
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
         # checking if an email matches the username or email the user is trying to use
@@ -130,7 +140,7 @@ class UserSignupView(APIView):
             or User.objects.filter(email=email).exists()
         ):
             return Response(
-                {"detail": "Email must be unique, try a different e-mail"},
+                {"detail": {"email": ["Email must be unique, try a different e-mail"]}},
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
 
@@ -180,7 +190,7 @@ class SigninView(APIView):
 
         if not confirmUserDetail(username_or_email):
             return Response(
-                {"detail": "Invalid Username or Email"},
+                {"detail": {"username_or_email": ["Invalid Username or Email"]}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -205,7 +215,7 @@ class SigninView(APIView):
             )
         else:
             return Response(
-                {"detail": "Invalid Login Credentials"},
+                {"detail": {"non_field_errors": ["Invalid Login Credentials"]}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -486,10 +496,57 @@ class ContestantView(APIView):
         return Response({"detail": "Successfully Deleted"}, status=status.HTTP_200_OK)
 
 
+def check_options(options: str):
+    options = str(options).replace(
+        "'", '"'
+    )  # to prevent the error I encountered doing json.loads()
+    try:
+        options: list[dict[str, any]] = json.loads(options)
+        if not type(options) == list:
+            return False
+        for option in options:
+            text: str = option.get("text")
+            if not (text and type(text) == str and text.strip()):
+                return False
+            is_correct: bool = option.get("is_correct")
+            is_correct = get_boolean_value(is_correct)
+            print(is_correct)
+            if not type(is_correct) == bool:
+                return False
+        return True
+    except:
+        return False
+
+
+def check_options_truth(options: list[dict[str, any]]):
+    true_option_count = 0
+    for option in options:
+        is_correct = option.get("is_correct")
+        if get_boolean_value(is_correct) == True:
+            true_option_count += 1
+
+    if true_option_count > 1:
+        return False
+    else:
+        return True
+
+
+def get_boolean_value(value: str):
+    boolean_value = {
+        "TRUE": True,
+        "1": True,
+        True: True,
+        "FALSE": False,
+        "0": False,
+        False: False,
+    }
+    return boolean_value.get(str(value).upper())
+
+
 class QuestionView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request: Request):
+    def get(self, request: Request, contest_id: str):
         questions = (
             Question.objects.select_related("contest")
             .prefetch_related("options")
@@ -517,19 +574,29 @@ class QuestionView(APIView):
         text: str = request.data.get("text")
         level: str = str(request.data.get("level"))
         has_option: bool = request.data.get("has_option")
-        options = request.data.get("options")
+        options: list = request.data.get("options")
         error_values = {}
         if not (level and level.isdigit()):
             error_values["level"] = ["This field is required and Must be a Number"]
         if not (text and text.strip()):
             error_values["text"] = ["This field is required"]
-        if not (type(has_option) == bool):
+
+        has_option = get_boolean_value(has_option)
+        # Validating different types of boolean requests
+        if not (has_option):
             error_values["has_options"] = ["Should be either 'true' or 'false'"]
         if has_option and not (type(options) == list):
             error_values["options"] = ["Options should be of list type '[]'"]
 
-        if (has_option and type(options) == list) and not len(options) > 1:
-            error_values[options] = [
+        options_are_valid = check_options(options)
+        if options_are_valid:
+            options = str(options).replace("'", '"')
+            options: list = json.loads(str(options))
+        else:
+            error_values["options"] = ["Should be a valid list of option objects"]
+
+        if has_option and options_are_valid and not len(options) > 1:
+            error_values["options"] = [
                 "Options must be more than one when options are set"
             ]
 
@@ -537,16 +604,34 @@ class QuestionView(APIView):
             return Response(
                 {"detail": error_values}, status=status.HTTP_400_BAD_REQUEST
             )
+        if not check_options_truth(options):
+            return Response(
+                {"detail": {"option": ["Only one of the options can be true"]}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         text = text.strip()
         level = int(level)
         if level > contest.levels:
             return Response(
                 {
-                    "level": f"You can only set questions for {"level 1" if not contest.levels>1 else f"level 1 - {contest.levels}"}"
+                    "level": [
+                        f"You can only set questions for {"level 1" if not contest.levels>1 else f"level 1 - {contest.levels}"}"
+                    ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        question = Question.objects.create(
+            contest=contest, text=text, level=level, has_option=has_option
+        )
 
+        Option.objects.bulk_create(
+            [
+                Option(
+                    question=question, text=option.text, is_correct=option.is_correct
+                )
+                for option in options
+            ]
+        )
         return Response(
-            {"detail": "Not Implemented"}, status=status.HTTP_501_NOT_IMPLEMENTED
+            {"detail": "Question Added Successfully"}, status=status.HTTP_200_OK
         )
