@@ -541,6 +541,8 @@ class QuestionView(APIView):
 
     # getAll questions in a contest
     def get(self, request: Request, contest_id: str):
+        search: str = request.query_params.get("search")
+        search = search.strip() if search else ""
         if not check_uuid(contest_id):
             return Response(
                 {"detail": "Invalid Contest ID"}, status=status.HTTP_400_BAD_REQUEST
@@ -552,9 +554,15 @@ class QuestionView(APIView):
             )
         contest = Contest.objects.prefetch_related(
             Prefetch(
-                "question_set", queryset=Question.objects.prefetch_related("option_set")
+                "question_set",
+                queryset=Question.objects.prefetch_related("option_set").filter(
+                    Q(text__icontains=search)
+                    | Q(level__icontains=search)
+                    | Q(contest__name__icontains=search)
+                ),
             )
         ).get(pk=contest_id, created_by=request.user)
+
         questions = contest.question_set.all()
         serializer = QuestionSerializer(questions, many=True)
         return Response({"data": serializer.data}, status=status.HTTP_200_OK)
