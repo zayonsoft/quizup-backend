@@ -14,7 +14,7 @@ from django.contrib.auth import authenticate
 from rest_framework.request import Request
 from rest_framework.permissions import IsAuthenticated
 import uuid, json
-from django.db.models import Q
+from django.db.models import Q, Prefetch
 
 
 DEBUG = settings.DEBUG
@@ -539,13 +539,23 @@ def get_boolean_value(value: str):
 class QuestionView(APIView):
     permission_classes = [IsAuthenticated]
 
+    # getAll questions in a contest
     def get(self, request: Request, contest_id: str):
-        questions = (
-            Question.objects.select_related("contest")
-            .prefetch_related("options")
-            .filter(contest__created_by=request.user)
-        )
-        # This will be for all questions for a person
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest ID"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contest = Contest.objects.prefetch_related(
+            Prefetch(
+                "question_set", queryset=Question.objects.prefetch_related("option_set")
+            )
+        ).get(pk=contest_id, created_by=request.user)
+        questions = contest.question_set.all()
         serializer = QuestionSerializer(questions, many=True)
         return Response({"data": serializer.data}, status=status.HTTP_200_OK)
 

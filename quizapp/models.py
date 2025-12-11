@@ -88,7 +88,7 @@ class Question(models.Model):
     time_edited = models.DateTimeField(null=True)
 
     def save(self, *args, **kwargs):
-        if not self.pk:
+        if not self._state.adding:
             self.time_edited = now()
         super().save(*args, **kwargs)
 
