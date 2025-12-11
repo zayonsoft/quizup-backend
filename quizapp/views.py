@@ -21,6 +21,14 @@ DEBUG = settings.DEBUG
 User = get_user_model()
 
 
+def check_uuid(id: str):
+    try:
+        uuid.UUID(id)
+        return True
+    except:
+        return False
+
+
 class MailValidationView(APIView):
     def post(self, request):
         email: str = request.data.get("email")
@@ -60,11 +68,7 @@ class MailValidationView(APIView):
             )
         else:
             return Response(
-                {
-                    "non_field_errors": [
-                        f"Couldn't Send Mail to {email}, pls try again later"
-                    ]
-                },
+                {"detail": f"Couldn't Send Mail to {email}, pls try again later"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -100,7 +104,7 @@ class UserSignupView(APIView):
         # Check if there are empty values, display the list
         if len(empty_values) != 0:
             return Response(
-                {"detail": empty_values},
+                empty_values,
                 status=status.HTTP_400_BAD_REQUEST,
             )
         username = username.strip()
@@ -108,19 +112,16 @@ class UserSignupView(APIView):
         password = password.strip()
 
         if not UserMailValidator.objects.filter(email__iexact=email).exists():
-            return Response({"detail": {"email": ["The Email Has no generated code"]}})
+            return Response(
+                {"email": ["The Email Has no generated code"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         is_code_valid = verify_code(email, validation_code)
 
         if not is_code_valid:
             return Response(
-                {
-                    "detail": {
-                        "code": [
-                            "Code is invalid or expired, you can request a new one"
-                        ]
-                    }
-                },
+                {"code": ["Code is invalid or expired, you can request a new one"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -131,7 +132,7 @@ class UserSignupView(APIView):
             or User.objects.filter(username=email).exists()
         ):
             return Response(
-                {"detail": {"username": ["Username must be unique for each user"]}},
+                {"username": ["Username must be unique for each user"]},
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
         # checking if an email matches the username or email the user is trying to use
@@ -140,7 +141,7 @@ class UserSignupView(APIView):
             or User.objects.filter(email=email).exists()
         ):
             return Response(
-                {"detail": {"email": ["Email must be unique, try a different e-mail"]}},
+                {"email": ["Email must be unique, try a different e-mail"]},
                 status=status.HTTP_406_NOT_ACCEPTABLE,
             )
 
@@ -180,9 +181,7 @@ class SigninView(APIView):
             empty_values["password"] = ["This field is required"]
 
         if len(empty_values) != 0:
-            return Response(
-                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(empty_values, status=status.HTTP_400_BAD_REQUEST)
 
         password = password.strip()
         username_or_email = username_or_email.strip()
@@ -190,7 +189,7 @@ class SigninView(APIView):
 
         if not confirmUserDetail(username_or_email):
             return Response(
-                {"detail": {"username_or_email": ["Invalid Username or Email"]}},
+                {"username_or_email": ["Invalid Username or Email"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -215,7 +214,7 @@ class SigninView(APIView):
             )
         else:
             return Response(
-                {"detail": {"non_field_errors": ["Invalid Login Credentials"]}},
+                {"non_field_errors": ["Invalid Login Credentials"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -237,18 +236,16 @@ class ContestsView(APIView):
             empty_values["levels"] = ["This field is required"]
 
         if len(empty_values) != 0:
-            return Response(
-                {"detail": empty_values}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(empty_values, status=status.HTTP_400_BAD_REQUEST)
 
         if Contest.objects.filter(name__iexact=name, created_by=request.user):
             return Response(
-                {"detail": {"name": ["A Contest with this name already exists"]}},
+                {"name": ["A Contest with this name already exists"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not levels.isdigit():
             return Response(
-                {"detail": {"levels": ["Must be a number"]}},
+                {"levels": ["Must be a number"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -278,29 +275,31 @@ class ContestView(APIView):
 
     # fetch a specific contest
     def get(self, request: Request, pk):
-        try:
-            uuid.UUID(pk)
-        except:
+        if not check_uuid(pk):
             return Response(
                 {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
             )
         if not Contest.objects.filter(id=pk, created_by=request.user).exists():
-            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         contest = Contest.objects.get(pk=pk)
 
         serializer = ContestSerializer(contest)
         return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
 
     def delete(self, request: Request, pk):
-        try:
-            uuid.UUID(pk)
-        except:
+        if not check_uuid(pk):
             return Response(
                 {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         if not Contest.objects.filter(id=pk, created_by=request.user).exists():
-            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         contest = Contest.objects.get(pk=pk)
 
         contest.delete()
@@ -309,22 +308,23 @@ class ContestView(APIView):
         )
 
     def patch(self, request: Request, pk):
-        try:
-            uuid.UUID(pk)
-        except:
+        if not check_uuid(pk):
             return Response(
                 {"detail": "Invalid Id"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         if not Contest.objects.filter(id=pk, created_by=request.user).exists():
-            return Response({"detail": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         contest = Contest.objects.get(pk=pk)
 
         name: str = request.data.get("name")
 
         if Contest.objects.filter(name__icontains=name).exclude(pk=pk).exists():
             return Response(
-                {"detail": {"name": ["A Contest with this name already exists"]}},
+                {"name": ["A Contest with this name already exists"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -333,9 +333,7 @@ class ContestView(APIView):
             serializer.save()
             return Response({"detail": "Contest Updated"}, status=status.HTTP_200_OK)
         else:
-            return Response(
-                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ContestantsView(APIView):
@@ -344,18 +342,18 @@ class ContestantsView(APIView):
     # Creating Contestant
     def post(self, request: Request, contest_id: str):
 
-        try:
-            uuid.UUID(contest_id)
-        except:
+        if not check_uuid(contest_id):
             return Response(
-                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Invalid Contest Id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not Contest.objects.filter(pk=contest_id, created_by=request.user):
             return Response(
                 {
                     "detail": "Contest not found or does not belong to the authenticated user"
-                }
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
 
         serializer = ContestantSerializer(
@@ -367,22 +365,21 @@ class ContestantsView(APIView):
                 {"detail": "Contestant Created"}, status=status.HTTP_201_CREATED
             )
         else:
-            return Response(
-                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # get all user's contestants for a contest
     def get(self, request: Request, contest_id: str):
-        try:
-            uuid.UUID(contest_id)
-        except:
+        if not check_uuid(contest_id):
             return Response(
-                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Invalid Contest Id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
         if not Contest.objects.filter(pk=contest_id, created_by=request.user).exists():
             return Response(
                 {
-                    "detail": "Contest not found or does not belong to the authenticated user"
+                    "non_field_errors": [
+                        "Contest not found or does not belong to the authenticated user"
+                    ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -402,15 +399,7 @@ class ContestantsView(APIView):
 
         serializer = ContestantSerializer(contestants, many=True)
 
-        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
-
-
-def check_uuid(id: str):
-    try:
-        uuid.UUID(id)
-        return True
-    except:
-        return False
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # to cater for delete, edit, update, fetching a specific contestant
@@ -418,7 +407,8 @@ class ContestantView(APIView):
     def get(self, request: Request, contestant_id: str):
         if not check_uuid(contestant_id):
             return Response(
-                {"detail": "Invalid Contestant Id"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Invalid Contestant Id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not Contestant.objects.filter(
@@ -426,7 +416,9 @@ class ContestantView(APIView):
         ).exists():
             return Response(
                 {
-                    "detail": "Contestant not found or does not belong to the authenticated user"
+                    "non_field_errors": [
+                        "Contestant not found or does not belong to the authenticated user"
+                    ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -437,13 +429,14 @@ class ContestantView(APIView):
         )
         serializer = ContestantSerializer(contestant)
 
-        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request: Request, contestant_id: str):
 
         if not check_uuid(contestant_id):
             return Response(
-                {"detail": "Invalid Contestant Id"}, status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Invalid Contestant Id"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not Contestant.objects.filter(
@@ -451,7 +444,9 @@ class ContestantView(APIView):
         ).exists():
             return Response(
                 {
-                    "detail": "Contestant not found or does not belong to the authenticated user"
+                    "non_field_errors": [
+                        "Contestant not found or does not belong to the authenticated user"
+                    ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -469,9 +464,7 @@ class ContestantView(APIView):
             serializer.save()
             return Response({"detail": "Contestant Updated"}, status=status.HTTP_200_OK)
         else:
-            return Response(
-                {"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request: Request, contestant_id: str):
         if not check_uuid(contestant_id):
@@ -601,12 +594,10 @@ class QuestionView(APIView):
             ]
 
         if len(error_values) != 0:
-            return Response(
-                {"detail": error_values}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response(error_values, status=status.HTTP_400_BAD_REQUEST)
         if not check_options_truth(options):
             return Response(
-                {"detail": {"option": ["Only one of the options can be true"]}},
+                {"option": ["Only one of the options can be true"]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         text = text.strip()
