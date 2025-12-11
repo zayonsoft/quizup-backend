@@ -85,7 +85,12 @@ class Question(models.Model):
     is_chosen = models.BooleanField(default=False)
     has_option = models.BooleanField(default=False)
     time_added = models.DateTimeField(auto_now_add=True)
-    time_edited = models.DateTimeField(blank=True)
+    time_edited = models.DateTimeField(null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.time_edited = now()
+        super().save(*args, **kwargs)
 
 
 class Option(models.Model):

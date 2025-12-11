@@ -584,7 +584,7 @@ class QuestionView(APIView):
         options_are_valid = check_options(options)
         if options_are_valid:
             options = str(options).replace("'", '"')
-            options: list = json.loads(str(options))
+            options: list[dict, any] = json.loads(str(options))
         else:
             error_values["options"] = ["Should be a valid list of option objects"]
 
@@ -618,7 +618,9 @@ class QuestionView(APIView):
         Option.objects.bulk_create(
             [
                 Option(
-                    question=question, text=option.text, is_correct=option.is_correct
+                    question=question,
+                    text=option.get("text"),
+                    is_correct=get_boolean_value(option.get("is_correct")),
                 )
                 for option in options
             ]
