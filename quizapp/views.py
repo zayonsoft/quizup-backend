@@ -794,3 +794,25 @@ class QuestionView(APIView):
         question.save()
 
         return Response({"detail": "Question Updated"}, status=status.HTTP_200_OK)
+
+    def delete(self, request: Request, question_id):
+        if not check_uuid(question_id):
+            return Response(
+                {"detail": "Invalid Question Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Question.objects.filter(
+            pk=question_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Question not found or doesn't belong to authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question: Question = Question.objects.get(pk=question_id)
+        question.delete()
+        return Response(
+            {"detail": "Question Deleted"}, status=status.HTTP_204_NO_CONTENT
+        )
