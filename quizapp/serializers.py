@@ -88,7 +88,7 @@ class OptionSerializer(serializers.ModelSerializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    option = OptionSerializer(many=True, source="option_set")
+    option = OptionSerializer(many=True, source="options")
     contest = ContestSerializer(read_only=True)
     time_added = serializers.DateTimeField(format="%d-%b-%y, %I:%M %p", read_only=True)
     time_edited = serializers.DateTimeField(format="%d-%b-%y, %I:%M %p", read_only=True)

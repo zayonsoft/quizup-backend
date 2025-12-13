@@ -266,7 +266,7 @@ class ContestsView(APIView):
         else:
             contests = Contest.objects.filter(created_by=request.user)
         serializer = ContestSerializer(contests, many=True)
-        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # For GET, EDIT, DELETE requires pk parameter
@@ -287,7 +287,7 @@ class ContestView(APIView):
         contest = Contest.objects.get(pk=pk)
 
         serializer = ContestSerializer(contest)
-        return Response({"detail": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def delete(self, request: Request, pk):
         if not check_uuid(pk):
@@ -383,17 +383,17 @@ class ContestantsView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        contest = Contest.objects.prefetch_related("contestant_set").get(
+        contest = Contest.objects.prefetch_related("contestants").get(
             pk=contest_id, created_by=request.user
         )
         search: str = request.query_params.get("search")
         contestants: Contestant
         if not (search and search.strip()):
-            contestants = contest.contestant_set.all()
+            contestants = contest.contestants.all()
 
         else:
             search = search.strip()
-            contestants = contest.contestant_set.all().filter(
+            contestants = contest.contestants.all().filter(
                 Q(name__icontains=search) | Q(contest__name__icontains=search)
             )
 
@@ -489,12 +489,16 @@ class ContestantView(APIView):
         return Response({"detail": "Successfully Deleted"}, status=status.HTTP_200_OK)
 
 
-def check_options(options: str):
-    options = str(options).replace(
-        "'", '"'
-    )  # to prevent the error I encountered doing json.loads()
+def check_options(options: str | bool | None):
+    if type(options) == str:
+        options = options.replace(
+            "'", '"'
+        )  # to prevent the error I encountered doing json.loads()
     try:
-        options: list[dict[str, any]] = json.loads(options)
+        options: list[dict[str, any]] = (
+            json.loads(options) if type(options) == str else options
+        )
+        # if after decoding it it's still not a list
         if not type(options) == list:
             return False
         for option in options:
@@ -503,7 +507,6 @@ def check_options(options: str):
                 return False
             is_correct: bool = option.get("is_correct")
             is_correct = get_boolean_value(is_correct)
-            print(is_correct)
             if not type(is_correct) == bool:
                 return False
         return True
@@ -513,15 +516,16 @@ def check_options(options: str):
 
 def check_options_truth(options: list[dict[str, any]]):
     true_option_count = 0
-    for option in options:
-        is_correct = option.get("is_correct")
-        if get_boolean_value(is_correct) == True:
-            true_option_count += 1
+    if options:
+        for option in options:
+            is_correct = option.get("is_correct")
+            if get_boolean_value(is_correct) == True:
+                true_option_count += 1
 
-    if true_option_count > 1:
-        return False
-    else:
-        return True
+        if true_option_count > 1:
+            return False
+        else:
+            return True
 
 
 def get_boolean_value(value: str):
@@ -536,7 +540,7 @@ def get_boolean_value(value: str):
     return boolean_value.get(str(value).upper())
 
 
-class QuestionView(APIView):
+class QuestionsView(APIView):
     permission_classes = [IsAuthenticated]
 
     # getAll questions in a contest
@@ -554,8 +558,8 @@ class QuestionView(APIView):
             )
         contest = Contest.objects.prefetch_related(
             Prefetch(
-                "question_set",
-                queryset=Question.objects.prefetch_related("option_set").filter(
+                "questions",
+                queryset=Question.objects.prefetch_related("options").filter(
                     Q(text__icontains=search)
                     | Q(level__icontains=search)
                     | Q(contest__name__icontains=search)
@@ -563,9 +567,9 @@ class QuestionView(APIView):
             )
         ).get(pk=contest_id, created_by=request.user)
 
-        questions = contest.question_set.all()
+        questions = contest.questions.all()
         serializer = QuestionSerializer(questions, many=True)
-        return Response({"data": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     # creating questions for a specific contest
     def post(self, request: Request, contest_id: str):
@@ -582,29 +586,40 @@ class QuestionView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         contest = Contest.objects.get(pk=contest_id, created_by=request.user)
-        text: str = request.data.get("text")
-        level: str = str(request.data.get("level"))
-        has_option: bool = request.data.get("has_option")
-        options: list = request.data.get("options")
+        text: str | None = (
+            str(request.data.get("text")).strip() if request.data.get("text") else None
+        )
+        level: str | None = (
+            request.data.get("level")
+            if str(request.data.get("level")).isdigit()
+            else None
+        )
+        has_option: bool | None = get_boolean_value(request.data.get("has_option"))
+        options: str | list = (
+            request.data.get("options") if request.data.get("options") else []
+        )
         error_values = {}
-        if not (level and level.isdigit()):
+        if not level:
             error_values["level"] = ["This field is required and Must be a Number"]
-        if not (text and text.strip()):
+        if not text:
             error_values["text"] = ["This field is required"]
 
-        has_option = get_boolean_value(has_option)
         # Validating different types of boolean requests
-        if not (has_option):
+        if type(has_option) != bool:
             error_values["has_options"] = ["Should be either 'true' or 'false'"]
-        if has_option and not (type(options) == list):
-            error_values["options"] = ["Options should be of list type '[]'"]
 
         options_are_valid = check_options(options)
-        if options_are_valid:
+        print(type(options))
+        if options_are_valid and type(options) == str:
             options = str(options).replace("'", '"')
             options: list[dict, any] = json.loads(str(options))
-        else:
-            error_values["options"] = ["Should be a valid list of option objects"]
+        elif not options_are_valid:
+            # if options are invalid and the has_options is set to true
+            if has_option:
+                error_values["options"] = ["Should be a valid list of option objects"]
+
+        if has_option and not (type(options) == list):
+            error_values["options"] = ["Options should be of list type '[]'"]
 
         if has_option and options_are_valid and not len(options) > 1:
             error_values["options"] = [
@@ -613,7 +628,7 @@ class QuestionView(APIView):
 
         if len(error_values) != 0:
             return Response(error_values, status=status.HTTP_400_BAD_REQUEST)
-        if not check_options_truth(options):
+        if has_option and not check_options_truth(options):
             return Response(
                 {"option": ["Only one of the options can be true"]},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -633,16 +648,149 @@ class QuestionView(APIView):
             contest=contest, text=text, level=level, has_option=has_option
         )
 
-        Option.objects.bulk_create(
-            [
+        if has_option:
+            Option.objects.bulk_create(
+                [
+                    Option(
+                        question=question,
+                        text=option.get("text"),
+                        is_correct=get_boolean_value(option.get("is_correct")),
+                    )
+                    for option in options
+                ]
+            )
+        return Response(
+            {"detail": "Question Added Successfully"}, status=status.HTTP_200_OK
+        )
+
+
+# this view will work on delete, update and get a specific question
+class QuestionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, question_id: str):
+        if not check_uuid(question_id):
+            return Response(
+                {"detail": "Invalid Question Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Question.objects.filter(
+            pk=question_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Question not found or doesn't belong to authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question = (
+            Question.objects.prefetch_related("options")
+            .select_related("contest")
+            .get(pk=question_id)
+        )
+        serializer = QuestionSerializer(question)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request: Request, question_id: str):
+
+        if not check_uuid(question_id):
+            return Response(
+                {"detail": "Invalid Question Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Question.objects.filter(
+            pk=question_id, contest__created_by=request.user
+        ).exists():
+            return Response(
+                {
+                    "detail": "Question not found or doesn't belong to authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        question: Question = (
+            Question.objects.select_related("contest")
+            .prefetch_related("options")
+            .get(pk=question_id)
+        )
+        contest: Contest = question.contest
+
+        text: str | None = (
+            str(request.data.get("text")).strip() if request.data.get("text") else None
+        )
+        level: str | None = (
+            request.data.get("level")
+            if str(request.data.get("level")).isdigit()
+            else None
+        )
+
+        has_option: bool | None = get_boolean_value(request.data.get("has_option"))
+
+        options: str | list = (
+            request.data.get("options") if request.data.get("options") else []
+        )
+        error_values = {}
+        if not level:
+            error_values["level"] = ["This field is required and Must be a Number"]
+        if not text:
+            error_values["text"] = ["This field is required"]
+
+        # Validating different types of boolean requests
+        if not type(has_option) == bool:
+            error_values["has_options"] = ["Should be either 'true' or 'false'"]
+
+        options_are_valid = check_options(options)
+
+        if options_are_valid and type(options) == str:
+            options = str(options).replace("'", '"')
+            options: list[dict, any] = json.loads(str(options))
+        elif not options_are_valid:
+            # if options are invalid and the has_options is set to true
+            if has_option:
+                error_values["options"] = ["Should be a valid list of option objects"]
+
+        if has_option and options_are_valid and not len(options) > 1:
+            error_values["options"] = [
+                "Options must be more than one when options are set"
+            ]
+        if len(error_values) != 0:
+            return Response(error_values, status=status.HTTP_400_BAD_REQUEST)
+
+        if has_option and not check_options_truth(options):
+            return Response(
+                {"option": ["Only one of the options can be true"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        text = text.strip()
+        level = int(level)
+        if level > contest.levels:
+            return Response(
+                {
+                    "level": [
+                        f"You can only set questions for {"level 1" if not contest.levels>1 else f"level 1 - {contest.levels}"}"
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        previous_options: Option = question.options.all()
+
+        question.has_option = has_option
+        question.level = level
+        question.text = text
+
+        previous_options.delete()
+
+        if has_option:
+            Option.objects.bulk_create(
                 Option(
                     question=question,
                     text=option.get("text"),
                     is_correct=get_boolean_value(option.get("is_correct")),
                 )
                 for option in options
-            ]
-        )
-        return Response(
-            {"detail": "Question Added Successfully"}, status=status.HTTP_200_OK
-        )
+            )
+        question.save()
+
+        return Response({"detail": "Question Updated"}, status=status.HTTP_200_OK)

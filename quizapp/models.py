@@ -79,7 +79,9 @@ class Contest(models.Model):
 
 class Question(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
+    contest = models.ForeignKey(
+        Contest, on_delete=models.CASCADE, related_name="questions"
+    )
     text = models.TextField()
     level = models.IntegerField()
     is_chosen = models.BooleanField(default=False)
@@ -97,7 +99,9 @@ class Option(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     text = models.TextField()
     is_correct = models.BooleanField(default=False)
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="options"
+    )
 
     class Meta:
         constraints = [
@@ -111,7 +115,9 @@ class Option(models.Model):
 
 class Contestant(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    contest = models.ForeignKey(Contest, on_delete=models.CASCADE)
+    contest = models.ForeignKey(
+        Contest, on_delete=models.CASCADE, related_name="contestants"
+    )
     name = models.CharField(max_length=700)
     is_qualified = models.BooleanField(default=True)
 
