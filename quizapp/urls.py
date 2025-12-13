@@ -20,6 +20,7 @@ urlpatterns = [
         views.ContestantView.as_view(),
         name="contestant",
     ),
+    path("questions/getAll", views.AllQuestionsView.as_view(), name="all_questions"),
     path("questions/<str:contest_id>", views.QuestionsView.as_view(), name="questions"),
     path("question/<str:question_id>", views.QuestionView.as_view(), name="question"),
 ]

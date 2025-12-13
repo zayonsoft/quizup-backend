@@ -170,15 +170,25 @@ def confirmUserDetail(email_or_username):
 
 class SigninView(APIView):
     def post(self, request: Request):
-        username_or_email: str = request.data.get("username_or_email")
-        password: str = request.data.get("password")
+        username_or_email: str = (
+            request.data.get("username_or_email")
+            if type(request.data.get("username_or_email")) == str
+            else None
+        )
+        password: str = (
+            request.data.get("password")
+            if type(request.data.get("password")) == str
+            else None
+        )
 
         empty_values = {}
         if not (username_or_email and username_or_email.strip()):
-            empty_values["username_or_email"] = ["This field is required"]
+            empty_values["username_or_email"] = [
+                "This field is required and should be a string"
+            ]
 
         if not (password and password.strip()):
-            empty_values["password"] = ["This field is required"]
+            empty_values["password"] = ["This field is required and should be a string"]
 
         if len(empty_values) != 0:
             return Response(empty_values, status=status.HTTP_400_BAD_REQUEST)
@@ -662,6 +672,30 @@ class QuestionsView(APIView):
         return Response(
             {"detail": "Question Added Successfully"}, status=status.HTTP_200_OK
         )
+
+
+# A view that gets all the questions a user has created
+class AllQuestionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request):
+        search: str = request.query_params.get("search")
+        search = search.strip() if search else ""
+
+        questions = (
+            Question.objects.prefetch_related("options")
+            .select_related("contest")
+            .filter(contest__created_by=request.user)
+            .filter(
+                Q(text__icontains=search)
+                | Q(level__icontains=search)
+                | Q(contest__name__icontains=search)
+            )
+        )
+
+        serializer = QuestionSerializer(questions, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # this view will work on delete, update and get a specific question
