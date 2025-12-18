@@ -2,6 +2,7 @@ from quizapp.serializers import (
     QuestionSerializer,
     ContestSerializer,
     ContestantSerializer,
+    ContestControlSerializer,
 )
 from rest_framework.views import APIView, Response, status
 from quizapp.models import (
@@ -858,7 +859,7 @@ class QuestionView(APIView):
         )
 
 
-class ContestControlView(APIView):
+class RandomQuestionSelection(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, contest_id: str):
@@ -887,9 +888,12 @@ class ContestControlView(APIView):
 
         contest = contest_queryset.get(pk=contest_id)
 
-        questions: QuerySet = contest.questions.filter(
-            level=level
-        )  # filter per level if applicable
+        if level:
+            questions: QuerySet = contest.questions.filter(
+                level=level, is_chosen=False
+            )  # filter per level if applicable
+        else:
+            questions: QuerySet = contest.questions.filter(is_chosen=False)
 
         if not questions.count() > 0:
             return Response(
@@ -898,15 +902,60 @@ class ContestControlView(APIView):
             )
 
         selected_question: Question = random.choice(questions)
-        controller: ContestControl = ContestControl.objects.get_or_create(
-            contest=contest
-        )
+        controller, created = ContestControl.objects.get_or_create(contest=contest)
 
         controller.current_question = selected_question
 
         selected_question.is_chosen = True
+        controller.save()
 
-        serializer = QuestionSerializer(selected_question)
         selected_question.save()
+        controller = ContestControl.objects.select_related(
+            "current_question", "contestant"
+        ).get(id=controller.pk)
+        serializer = ContestControlSerializer(controller)
 
-        return Response({serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+# This end-point restores all selected questions and all contestants that might have been marked as disqualified
+class ResetContestView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest ID"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        contest_queryset = Contest.objects.prefetch_related("questions").filter(
+            pk=contest_id, created_by=request.user
+        )
+
+        if not contest_queryset.exists():
+            return Response(
+                {
+                    "detail": "Contest not found or doesn't belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contest = contest_queryset.get(pk=contest_id)
+
+        questions: QuerySet = contest.questions.all()
+        questions.update(is_chosen=False)
+
+        contestants: QuerySet = contest.contestants.all()
+        contestants.update(is_qualified=True)
+
+        controller, created = ContestControl.objects.get_or_create(contest=contest)
+
+        controller.contestant = None
+        controller.current_question = None
+        controller.fifty_allowed = False
+        controller.show_answer = False
+        controller.display = False
+        controller.last_admin_access = None
+        controller.save()
+
+        return Response({"detail": "Contest Has Been Reset"}, status=status.HTTP_200_OK)

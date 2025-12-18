@@ -23,4 +23,14 @@ urlpatterns = [
     path("questions/getAll", views.AllQuestionsView.as_view(), name="all_questions"),
     path("questions/<str:contest_id>", views.QuestionsView.as_view(), name="questions"),
     path("question/<str:question_id>", views.QuestionView.as_view(), name="question"),
+    path(
+        "contestControl/randomQuestion/<str:contest_id>",
+        views.RandomQuestionSelection.as_view(),
+        name="random_question",
+    ),
+    path(
+        "contestControl/resetContest/<str:contest_id>",
+        views.ResetContestView.as_view(),
+        name="random_question",
+    ),
 ]

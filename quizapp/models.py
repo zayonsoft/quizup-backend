@@ -133,9 +133,11 @@ class Contestant(models.Model):
 class ContestControl(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contest = models.OneToOneField(Contest, on_delete=models.CASCADE)
-    contestant = models.OneToOneField(Contestant, on_delete=models.SET_NULL, null=True)
+    contestant = models.OneToOneField(
+        Contestant, on_delete=models.SET_NULL, null=True, blank=True
+    )
     current_question = models.OneToOneField(
-        Question, on_delete=models.SET_NULL, null=True
+        Question, on_delete=models.SET_NULL, null=True, blank=True
     )
     fifty_allowed = models.BooleanField(default=False)
     show_answer = models.BooleanField(default=False)
@@ -143,7 +145,11 @@ class ContestControl(models.Model):
     last_admin_access = models.DateTimeField(blank=True, null=True)
 
     def clean(self):
-        if self.contest != self.contestant.contest:
+        if (
+            not self._state.adding
+            and self.contestant
+            and (self.contest != self.contestant.contest)
+        ):
             return ValidationError(
                 {"contestant": "Contestant is not part of the contest"}
             )

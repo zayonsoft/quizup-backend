@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from quizapp.models import Question, Contest, Contestant, Option
+from quizapp.models import Question, Contest, Contestant, Option, ContestControl
 from django.contrib.auth import get_user_model
 from rest_framework.validators import UniqueTogetherValidator, DataError
 import uuid
@@ -88,7 +88,7 @@ class OptionSerializer(serializers.ModelSerializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    option = OptionSerializer(many=True, source="options")
+    options = OptionSerializer(many=True, read_only=True)
     contest = ContestSerializer(read_only=True)
     time_added = serializers.DateTimeField(format="%d-%b-%y, %I:%M %p", read_only=True)
     time_edited = serializers.DateTimeField(format="%d-%b-%y, %I:%M %p", read_only=True)
@@ -96,3 +96,12 @@ class QuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = "__all__"
+
+
+class ContestControlSerializer(serializers.ModelSerializer):
+    current_question = QuestionSerializer(read_only=True)
+    contestant = ContestantSerializer(read_only=True)
+
+    class Meta:
+        model = ContestControl
+        exclude = ["contest", "last_admin_access"]
