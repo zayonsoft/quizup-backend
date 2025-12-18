@@ -4,7 +4,14 @@ from quizapp.serializers import (
     ContestantSerializer,
 )
 from rest_framework.views import APIView, Response, status
-from quizapp.models import Question, UserMailValidator, Contest, Contestant, Option
+from quizapp.models import (
+    Question,
+    UserMailValidator,
+    Contest,
+    Contestant,
+    Option,
+    ContestControl,
+)
 from quizapp.generator import generate_code, verify_code
 from quizapp.registration_mails import send_validation_code
 from django.conf import settings
@@ -13,8 +20,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework.request import Request
 from rest_framework.permissions import IsAuthenticated
-import uuid, json
+import uuid, json, random
 from django.db.models import Q, Prefetch
+from django.db.models.query import QuerySet
 
 
 DEBUG = settings.DEBUG
@@ -361,7 +369,7 @@ class ContestantsView(APIView):
         if not Contest.objects.filter(pk=contest_id, created_by=request.user):
             return Response(
                 {
-                    "detail": "Contest not found or does not belong to the authenticated user"
+                    "detail": "Contest not found or doesn't belong to the authenticated user"
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
@@ -387,9 +395,7 @@ class ContestantsView(APIView):
         if not Contest.objects.filter(pk=contest_id, created_by=request.user).exists():
             return Response(
                 {
-                    "non_field_errors": [
-                        "Contest not found or does not belong to the authenticated user"
-                    ]
+                    "detail": "Contest not found or doesn't belong to the authenticated user"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -427,7 +433,7 @@ class ContestantView(APIView):
             return Response(
                 {
                     "non_field_errors": [
-                        "Contestant not found or does not belong to the authenticated user"
+                        "Contestant not found or doesn't belong to the authenticated user"
                     ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -455,7 +461,7 @@ class ContestantView(APIView):
             return Response(
                 {
                     "non_field_errors": [
-                        "Contestant not found or does not belong to the authenticated user"
+                        "Contestant not found or doesn't belong to the authenticated user"
                     ]
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -487,7 +493,7 @@ class ContestantView(APIView):
         ).exists():
             return Response(
                 {
-                    "detail": "Contestant not found or does not belong to the authenticated user"
+                    "detail": "Contestant not found or doesn't belong to the authenticated user"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -591,7 +597,7 @@ class QuestionsView(APIView):
         if not Contest.objects.filter(pk=contest_id, created_by=request.user).exists():
             return Response(
                 {
-                    "detail": "Contest not found or does not belong to the authenticated user"
+                    "detail": "Contest not found or doesn't belong to the authenticated user"
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -850,3 +856,57 @@ class QuestionView(APIView):
         return Response(
             {"detail": "Question Deleted"}, status=status.HTTP_204_NO_CONTENT
         )
+
+
+class ContestControlView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest ID"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        contest_queryset = Contest.objects.prefetch_related("questions").filter(
+            pk=contest_id, created_by=request.user
+        )
+
+        unscreened_level = request.query_params.get("level")
+
+        level: int | None = (
+            unscreened_level if str(unscreened_level).isdigit() else None
+        )
+
+        if not contest_queryset.exists():
+            return Response(
+                {
+                    "detail": "Contest not found or doesn't belong to the authenticated user"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        contest = contest_queryset.get(pk=contest_id)
+
+        questions: QuerySet = contest.questions.filter(
+            level=level
+        )  # filter per level if applicable
+
+        if not questions.count() > 0:
+            return Response(
+                {"detail": "No Available Question to Select"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        selected_question: Question = random.choice(questions)
+        controller: ContestControl = ContestControl.objects.get_or_create(
+            contest=contest
+        )
+
+        controller.current_question = selected_question
+
+        selected_question.is_chosen = True
+
+        serializer = QuestionSerializer(selected_question)
+        selected_question.save()
+
+        return Response({serializer.data}, status=status.HTTP_200_OK)

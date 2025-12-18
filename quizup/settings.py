@@ -41,7 +41,20 @@ INSTALLED_APPS = [
     "quizapp.apps.QuizappConfig",
     "rest_framework",
     "rest_framework_simplejwt",
+    "channels",
 ]
+
+ASGI_APPLICATION = "quizup.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
