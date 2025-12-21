@@ -33,4 +33,9 @@ urlpatterns = [
         views.ResetContestView.as_view(),
         name="random_question",
     ),
+    path(
+        "contestControl/<str:contest_id>/displaySpecificQuestion",
+        views.DisplaySpecificQuestionView.as_view(),
+        name="random_question",
+    ),
 ]

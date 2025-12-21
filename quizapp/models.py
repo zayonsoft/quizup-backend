@@ -132,7 +132,9 @@ class Contestant(models.Model):
 
 class ContestControl(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    contest = models.OneToOneField(Contest, on_delete=models.CASCADE)
+    contest = models.OneToOneField(
+        Contest, on_delete=models.CASCADE, related_name="control"
+    )
     contestant = models.OneToOneField(
         Contestant, on_delete=models.SET_NULL, null=True, blank=True
     )

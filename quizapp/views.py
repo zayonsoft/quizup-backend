@@ -24,6 +24,7 @@ from rest_framework.permissions import IsAuthenticated
 import uuid, json, random
 from django.db.models import Q, Prefetch
 from django.db.models.query import QuerySet
+from django.db.models.manager import BaseManager
 
 
 DEBUG = settings.DEBUG
@@ -959,3 +960,59 @@ class ResetContestView(APIView):
         controller.save()
 
         return Response({"detail": "Contest Has Been Reset"}, status=status.HTTP_200_OK)
+
+
+class DisplaySpecificQuestionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, contest_id):
+        question_id = (
+            str(request.data.get("question_id")).strip()
+            if request.data.get("question_id")
+            else None
+        )
+
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"}
+            )
+
+        contest = Contest.objects.prefetch_related("questions", "control").get(
+            pk=contest_id
+        )
+
+        if not question_id:
+            return Response(
+                {"question_id": ["This Field is required"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not check_uuid(question_id):
+            return Response(
+                {"detail": "Invalid Question ID"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        contest_questions: BaseManager[Question] = contest.questions.all()
+
+        if not contest_questions.filter(pk=question_id).exists():
+            return Response(
+                {"detail": "Question not found or not part of the contest"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        question: Question = contest_questions.get(pk=question_id)
+        controller: ContestControl = contest.control
+
+        controller.current_question = question
+        question.is_chosen = True
+        question.save()
+        controller.save()
+
+        return Response(
+            {"detail": "Display Question Set Successfully"}, status=status.HTTP_200_OK
+        )
