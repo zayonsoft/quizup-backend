@@ -12,6 +12,7 @@ from quizapp.models import (
     Contestant,
     Option,
     ContestControl,
+    ProbableWrongOption,
 )
 from quizapp.generator import generate_code, verify_code
 from quizapp.registration_mails import send_validation_code
@@ -1016,3 +1017,170 @@ class DisplaySpecificQuestionView(APIView):
         return Response(
             {"detail": "Display Question Set Successfully"}, status=status.HTTP_200_OK
         )
+
+
+# not tested
+class ChangeContestant(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(request: Request, contest_id: str):
+        contestant_id = (
+            str(request.data.get("contestant_id")).strip()
+            if request.data.get("contestant_id")
+            else None
+        )
+
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        contest = Contest.objects.prefetch_related("control__contestant").get(
+            pk=contest_id
+        )
+
+        if not contestant_id:
+            return Response(
+                {"contestant_id": ["This field is required"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not check_uuid(contestant_id):
+            return Response(
+                {"detail": "Invalid Contestant ID"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        controller: ContestControl = contest.control
+
+        contestant_queryset: BaseManager[Contestant] = contest.contestants.filter(
+            pk=contestant_id
+        )
+        if not contestant_queryset.exists():
+            return Response(
+                {"detail": "Contestant doesn't exist in the given contest"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        contestant = contestant_queryset.get(pk=contestant_id)
+
+        controller.contestant = contestant
+        controller.save()
+
+        return Response({"detail": "Contestant Updated"}, status=status.HTTP_200_OK)
+
+
+# not tested
+class TurnOffContestDisplayView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        contest = Contest.objects.prefetch_related("control").get(pk=contest_id)
+
+        control: ContestControl = contest.control
+
+        control.display = False
+        control.save()
+        return Response(
+            {"detail": "Contest Display Turned off"}, status=status.HTTP_200_OK
+        )
+
+
+class SetFiftyfiftyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        contest = Contest.objects.prefetch_related("control").get(pk=contest_id)
+        try:
+            control: ContestControl = contest.control
+        except:
+            return Response(
+                {"detail": "Control session not set"}, status=status.HTTP_409_CONFLICT
+            )
+
+        # create probable option if it doesn't exist
+        current_question = control.current_question
+        if current_question:
+            probable_option, created = ProbableWrongOption.objects.get_or_create(
+                question=current_question
+            )
+            # add the probable wrong option
+            # di di di ta ta ta
+        control.fifty_allowed = True
+        control.save()
+
+        return Response({"detail": "Fifty-Fity Set"}, status=status.HTTP_200_OK)
+
+
+# for general users that don't have to be authenticated to see the questions
+class GeneralQuestionView(APIView):
+    def get(self, request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id):
+            return Response(
+                {"detail": "Contest not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        contest = Contest.objects.prefetch_related(
+            "control__current_question__options"
+        ).get(pk=contest_id)
+
+        control: ContestControl
+        try:
+            control = contest.control
+        except:
+            return Response(
+                {"detail": "Cannot fetch data for current session"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        current_question = control.current_question
+
+        fifty_allowed = control.fifty_allowed
+        show_answer = control.show_answer
+        display = control.display
+
+        # find the best place to create probable option
+
+        question_serializer = QuestionSerializer(current_question)
+        question_data = question_serializer.data
+        options = question_data.get("options")
+
+        for option in options:
+            # set the true option to false to avoid sending unwanted data to casual users
+            option["is_correct"] = False
+
+        # assign the modified options to serializer
+        question_data["options"] = options
+        return Response(question_data, status=status.HTTP_200_OK)

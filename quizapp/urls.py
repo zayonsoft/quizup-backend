@@ -38,4 +38,9 @@ urlpatterns = [
         views.DisplaySpecificQuestionView.as_view(),
         name="random_question",
     ),
+    path(
+        "view/<str:contest_id>/currentQuestion",
+        views.GeneralQuestionView.as_view(),
+        name="viewer_current_question",
+    ),
 ]

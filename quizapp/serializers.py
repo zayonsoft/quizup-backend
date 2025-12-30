@@ -84,7 +84,8 @@ class OptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Option
-        fields = "__all__"
+        # fields = "__all__"
+        exclude = ["question"]
 
 
 class QuestionSerializer(serializers.ModelSerializer):

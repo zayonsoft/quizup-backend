@@ -171,3 +171,14 @@ class UserMailValidator(models.Model):
     otp_hash = models.CharField(max_length=100, editable=False, null=True)
     otp_salt = models.CharField(max_length=100, editable=False, null=True)
     otp_expires = models.DateTimeField(default=ten_minutes_from_now)
+
+
+class ProbableWrongOption(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    option = models.ForeignKey(
+        Option,
+        on_delete=models.CASCADE,
+        related_name="probable_options",
+        blank=True,
+        null=True,
+    )
