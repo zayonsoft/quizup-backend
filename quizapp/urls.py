@@ -23,8 +23,9 @@ urlpatterns = [
     path("questions/getAll", views.AllQuestionsView.as_view(), name="all_questions"),
     path("questions/<str:contest_id>", views.QuestionsView.as_view(), name="questions"),
     path("question/<str:question_id>", views.QuestionView.as_view(), name="question"),
+    # Contest Control
     path(
-        "contestControl/randomQuestion/<str:contest_id>",
+        "contestControl/<str:contest_id>/selectRandomQuestion",
         views.RandomQuestionSelection.as_view(),
         name="random_question",
     ),
@@ -32,6 +33,16 @@ urlpatterns = [
         "contestControl/resetContest/<str:contest_id>",
         views.ResetContestView.as_view(),
         name="random_question",
+    ),
+    path(
+        "contestControl/<str:contest_id>/resetContest",
+        views.ResetContestView.as_view(),
+        name="random_question",
+    ),
+    path(
+        "contestControl/<str:contest_id>/setFiftyFifty",
+        views.SetFiftyfiftyView.as_view(),
+        name="set_fifty_fifty",
     ),
     path(
         "contestControl/<str:contest_id>/displaySpecificQuestion",

@@ -908,6 +908,10 @@ class RandomQuestionSelection(APIView):
 
         controller.current_question = selected_question
 
+        # turn off answers when question changes
+        controller.show_answer = False
+        controller.fifty_allowed = False
+
         selected_question.is_chosen = True
         controller.save()
 
@@ -1010,6 +1014,11 @@ class DisplaySpecificQuestionView(APIView):
         controller: ContestControl = contest.control
 
         controller.current_question = question
+
+        # turn off answers when question changes
+        controller.show_answer = False
+        controller.fifty_allowed = False
+
         question.is_chosen = True
         question.save()
         controller.save()
@@ -1116,7 +1125,9 @@ class SetFiftyfiftyView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        contest = Contest.objects.prefetch_related("control").get(pk=contest_id)
+        contest = Contest.objects.prefetch_related(
+            "control__current_question__options"
+        ).get(pk=contest_id)
         try:
             control: ContestControl = contest.control
         except:
@@ -1125,13 +1136,41 @@ class SetFiftyfiftyView(APIView):
             )
 
         # create probable option if it doesn't exist
-        current_question = control.current_question
-        if current_question:
-            probable_option, created = ProbableWrongOption.objects.get_or_create(
-                question=current_question
+        current_question: BaseManager[Question] = control.current_question
+
+        # if there is currently no question being displayed
+        if not current_question:
+            return Response(
+                {"detail": "No currently running question"},
+                status=status.HTTP_409_CONFLICT,
             )
-            # add the probable wrong option
-            # di di di ta ta ta
+
+        probable_option, created = ProbableWrongOption.objects.get_or_create(
+            question=current_question
+        )
+        options: BaseManager[Option] = current_question.options.all()
+        wrong_options = options.exclude(is_correct=True)
+
+        if not wrong_options.count() > 1:
+            return Response(
+                {
+                    "detail": "Cannot Set fifty-fify as wrong options are not greater than one"
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # randomly select one of the options as probable wrong
+
+        random_probable_option = random.choice(wrong_options)
+        if not probable_option.option:
+            probable_option.option = random_probable_option
+            probable_option.save()
+
+        print("---------------")
+        print(random_probable_option)
+
+        # add the probable wrong option
+        # di di di ta ta ta
         control.fifty_allowed = True
         control.save()
 
@@ -1166,20 +1205,39 @@ class GeneralQuestionView(APIView):
             )
 
         current_question = control.current_question
+        if not current_question:
+            return Response(
+                {"detail": "No question to load"}, status=status.HTTP_409_CONFLICT
+            )
 
+        probable_wrong_options: BaseManager[ProbableWrongOption]
+        probable_wrong_options = current_question.probable_wrong_options.all()
+        try:
+            probable_wrong_options = current_question.probable_wrong_options.all()
+        except:
+            probable_wrong_options = None
+
+        display = control.display
         fifty_allowed = control.fifty_allowed
         show_answer = control.show_answer
-        display = control.display
 
-        # find the best place to create probable option
+        if not display:
+            return Response({"detail": "Display is off"}, status=status.HTTP_423_LOCKED)
 
         question_serializer = QuestionSerializer(current_question)
         question_data = question_serializer.data
         options = question_data.get("options")
 
         for option in options:
-            # set the true option to false to avoid sending unwanted data to casual users
-            option["is_correct"] = False
+            for probable_option in probable_wrong_options:
+                if str(probable_option.option.id) == option.get("id"):
+
+                    if fifty_allowed or option.get("is_correct"):
+                        option["is_correct"] = True
+                    else:
+                        options["is_correct"] = False
+
+                    # next is to sort fifty_fify and show answer
 
         # assign the modified options to serializer
         question_data["options"] = options

@@ -174,7 +174,9 @@ class UserMailValidator(models.Model):
 
 
 class ProbableWrongOption(models.Model):
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    question = models.ForeignKey(
+        Question, on_delete=models.CASCADE, related_name="probable_wrong_options"
+    )
     option = models.ForeignKey(
         Option,
         on_delete=models.CASCADE,
