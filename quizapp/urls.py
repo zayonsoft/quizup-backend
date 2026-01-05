@@ -30,14 +30,29 @@ urlpatterns = [
         name="random_question",
     ),
     path(
-        "contestControl/resetContest/<str:contest_id>",
+        "contestControl/<str:contest_id>/resetContest",
         views.ResetContestView.as_view(),
-        name="random_question",
+        name="reset_contest",
+    ),
+    path(
+        "contestControl/<str:contest_id>/changeContestant",
+        views.ChangeContestant.as_view(),
+        name="change_contestant",
+    ),
+    path(
+        "contestControl/<str:contest_id>/turnOffDisplay",
+        views.TurnOffContestDisplayView.as_view(),
+        name="turn_off_display",
+    ),
+    path(
+        "contestControl/<str:contest_id>/turnOnDisplay",
+        views.TurnOnContestDisplayView.as_view(),
+        name="turn_on_display",
     ),
     path(
         "contestControl/<str:contest_id>/resetContest",
         views.ResetContestView.as_view(),
-        name="random_question",
+        name="reset_contest",
     ),
     path(
         "contestControl/<str:contest_id>/setFiftyFifty",
@@ -47,8 +62,9 @@ urlpatterns = [
     path(
         "contestControl/<str:contest_id>/displaySpecificQuestion",
         views.DisplaySpecificQuestionView.as_view(),
-        name="random_question",
+        name="display_specific_question",
     ),
+    # view current question
     path(
         "view/<str:contest_id>/currentQuestion",
         views.GeneralQuestionView.as_view(),

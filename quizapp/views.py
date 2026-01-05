@@ -1028,11 +1028,10 @@ class DisplaySpecificQuestionView(APIView):
         )
 
 
-# not tested
 class ChangeContestant(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(request: Request, contest_id: str):
+    def post(self, request: Request, contest_id: str):
         contestant_id = (
             str(request.data.get("contestant_id")).strip()
             if request.data.get("contestant_id")
@@ -1107,6 +1106,29 @@ class TurnOffContestDisplayView(APIView):
         control.save()
         return Response(
             {"detail": "Contest Display Turned off"}, status=status.HTTP_200_OK
+        )
+
+
+class TurnOnContestDisplayView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, contest_id: str):
+        if not check_uuid(contest_id):
+            return Response(
+                {"detail": "Invalid Contest Id"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not Contest.objects.filter(pk=contest_id, created_by=request.user):
+            return Response(
+                {"detail": "Contest not found or doesn't belong to authenticated user"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        contest = Contest.objects.prefetch_related("control").get(pk=contest_id)
+        control: ContestControl = contest.control
+        control.display = True
+        control.save()
+        return Response(
+            {"detail": "Contest display turned on"}, status=status.HTTP_200_OK
         )
 
 
